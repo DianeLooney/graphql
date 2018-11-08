@@ -43,13 +43,21 @@ type Position struct {
 	Offset int
 }
 
+type historyEntry struct {
+	pos   Position
+	token Token
+	lit   string
+}
 type Scanner struct {
-	src    []byte
-	offset int
+	src          []byte
+	offset       int
+	history      []historyEntry
+	historyIndex int
+	undoCount    []int
 }
 type scanFunc func(s *Scanner) (token Token, lit string)
 
-var scanPriority = [...]scanFunc{
+var scanFuncs = [...]scanFunc{
 	(*Scanner).scanEOF,
 	(*Scanner).scanComment,
 	(*Scanner).scanWhitespace,
@@ -69,9 +77,25 @@ func (s *Scanner) Init(src []byte) {
 	s.offset = 0
 }
 
+func (s *Scanner) Peek() (pos Position, token Token, lit string) {
+	pos = Position{0, s.offset}
+	for _, f := range scanFuncs {
+		token, lit = f(s)
+
+		if token == ILLEGAL && len(lit) == 0 {
+			continue
+		}
+
+		return
+	}
+
+	lit = string(s.src[0])
+	return
+}
+
 func (s *Scanner) Scan() (pos Position, token Token, lit string) {
 	pos = Position{0, s.offset}
-	for _, f := range scanPriority {
+	for _, f := range scanFuncs {
 		token, lit = f(s)
 
 		if token == ILLEGAL && len(lit) == 0 {
