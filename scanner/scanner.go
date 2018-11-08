@@ -74,10 +74,12 @@ func (s *Scanner) Scan() (pos Position, token Token, lit string) {
 	for _, f := range scanPriority {
 		token, lit = f(s)
 
-		if token != ILLEGAL {
-			s.consume(lit)
-			return
+		if token == ILLEGAL && len(lit) == 0 {
+			continue
 		}
+
+		s.consume(lit)
+		return
 	}
 
 	lit = string(s.src[0])
@@ -201,15 +203,15 @@ func (s *Scanner) scanString() (token Token, lit string) {
 	}
 	for i := 1; i < len(s.src); i++ {
 		if s.src[i] == '"' {
-			return STRING, string(s.src[0 : i+1])
+			return STRING, string(s.src[:i+1])
 		}
 
 		if s.src[i] == '\n' {
-			return ILLEGAL, ""
+			return ILLEGAL, string(s.src[:i])
 		}
 
 		if s.src[i] == '\r' && i+1 < len(s.src) && s.src[i+1] == '\n' {
-			return ILLEGAL, ""
+			return ILLEGAL, string(s.src[:i])
 		}
 
 		if s.src[i] == '\\' && i+1 < len(s.src) {
@@ -219,10 +221,10 @@ func (s *Scanner) scanString() (token Token, lit string) {
 				continue
 			}
 			if s.src[i] != 'u' {
-				return ILLEGAL, ""
+				return ILLEGAL, string(s.src[:i+2])
 			}
 			if i+4 < len(s.src) {
-				return ILLEGAL, ""
+				return ILLEGAL, string(s.src[:i+5])
 			}
 
 			testChar := func(b byte) bool {
@@ -245,7 +247,7 @@ func (s *Scanner) scanString() (token Token, lit string) {
 				i += 4
 				continue
 			}
-			return ILLEGAL, ""
+			return ILLEGAL, string(s.src[:i+1])
 		}
 	}
 	return ILLEGAL, ""

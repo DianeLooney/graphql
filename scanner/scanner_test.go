@@ -74,4 +74,11 @@ thing"""`)
 	expectScanResult(t, s, scanner.LCURLY, `{`)
 	expectScanResult(t, s, scanner.BAR, `|`)
 	expectScanResult(t, s, scanner.RCURLY, `}`)
+
+	s = &scanner.Scanner{}
+	s.Init([]byte(`
+"\"something
+`))
+	expectScanResult(t, s, scanner.NEWLINE, "\n")
+	expectScanResult(t, s, scanner.ILLEGAL, `"\"something`)
 }
