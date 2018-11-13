@@ -23,29 +23,35 @@ func (p *Parser) Init(src []byte) {
 }
 
 func (p *Parser) Parse() (doc ast.Document) {
-	doc.Scalars = make([]ast.ScalarDef, 0)
+	doc.Scalars = make(map[string]ast.ScalarDef)
+	doc.ObjectTypes = make(map[string]ast.ObjectTypeDef)
+	doc.Interfaces = make(map[string]ast.InterfaceDef)
+
 	for {
 		var desc *string
-		_, tkn, lit := p.sc.Peek()
-		if tkn == scanner.EOF {
+		if p.hasNextTkn(scanner.EOF) {
 			break
 		}
+
 		desc = p.parseDescription()
-		if tkn == scanner.NAME {
-			switch lit {
-			case "schema":
-				if desc != nil {
-					p.errors = append(p.errors, errors.New("unexpected description string given on schema"))
-				}
-				schema := p.parseSchema()
-				doc.Schema = &schema
-			case "scalar":
-				scalar := p.parseScalarTypeDefinition(desc)
-				doc.Scalars = append(doc.Scalars, scalar)
-			case "type":
-				obj := p.parseObjectTypeDefinition(desc)
-				doc.ObjectTypes = append(doc.ObjectTypes, obj)
+		if p.hasNextName("schema") {
+			if desc != nil {
+				p.errors = append(p.errors, errors.New("unexpected description string given on schema"))
 			}
+			schema := p.parseSchema()
+			doc.Schema = &schema
+		} else if p.hasNextName("scalar") {
+			scalar := p.parseScalarTypeDefinition(desc)
+			doc.Scalars[scalar.Name] = scalar
+		} else if p.hasNextName("type") {
+			obj := p.parseObjectTypeDefinition(desc)
+			doc.ObjectTypes[obj.Name] = obj
+		} else if p.hasNextName("interface") {
+			intf := p.parseInterfaceTypeDef(desc)
+			doc.Interfaces[intf.Name] = intf
+		} else {
+			_, _, lit := p.sc.Scan()
+			p.errors = append(p.errors, errors.New("unknown: "+lit))
 		}
 	}
 
@@ -53,141 +59,174 @@ func (p *Parser) Parse() (doc ast.Document) {
 }
 
 func (p *Parser) parseSchema() (schema ast.Schema) {
-	_, tkn, lit := p.sc.Scan()
-	if tkn != scanner.NAME || lit != "schema" {
-		p.errors = append(p.errors, errors.New("expected token 'schema'"))
-	}
+	p.consumeNameLiteral("schema")
 	schema.Directives = p.parseDirectives()
-	_, tkn, lit = p.sc.Peek()
-	if tkn != scanner.LCURLY {
-		p.errors = append(p.errors, errors.New("expected a block definining root types, it was: "+lit))
-		return
-	}
-	p.sc.Scan()
+	p.consumeToken(scanner.LCURLY)
 	for {
-		_, tkn, _ := p.sc.Peek()
-		if tkn == scanner.RCURLY {
-			break
-		}
-		if tkn == scanner.EOF {
-			p.errors = append(p.errors, errors.New("unexpected EOF"))
+		if p.hasNextTkn(scanner.RCURLY) || p.hasNextTkn(scanner.EOF) {
 			break
 		}
 
-		_, tkn, opName := p.sc.Scan()
-		if tkn != scanner.NAME {
-			p.errors = append(p.errors, errors.New("expected a name"))
-			continue
-		}
-
-		if opName != "query" &&
-			opName != "mutation" &&
-			opName != "subscription" {
-			p.errors = append(p.errors, errors.New("expected name to be query|mutation|subscription"))
-		}
-		_, tkn, _ = p.sc.Peek()
-		if tkn != scanner.COLON {
-			p.errors = append(p.errors, errors.New("expected a colon"))
-			continue
-		}
-		p.sc.Scan()
-
-		_, tkn, namedType := p.sc.Peek()
-		if tkn != scanner.NAME {
-			p.errors = append(p.errors, errors.New("expected a name"))
-			continue
-		}
-		p.sc.Scan()
-
-		switch opName {
-		case "query":
-			schema.Query = &namedType
-		case "mutation":
-			schema.Mutation = &namedType
-		case "subscription":
-			schema.Subscription = &namedType
-		}
+		schema.RootOperationTypeDefs = append(schema.RootOperationTypeDefs, p.parseRootOpTypeDefinition())
 	}
+	p.consumeToken(scanner.RCURLY)
+
+	return
+}
+func (p *Parser) parseRootOpTypeDefinition() (def ast.RootOperationTypeDef) {
+	def.OpType = p.consumeName()
+	p.consumeToken(scanner.COLON)
+	def.NamedType = p.consumeName()
 
 	return
 }
 func (p *Parser) parseScalarTypeDefinition(desc *string) (scalar ast.ScalarDef) {
 	scalar.Description = desc
-	p.sc.Scan()
-	_, tknName, litName := p.sc.Scan()
-	if tknName != scanner.NAME {
-		p.errors = append(p.errors, errors.New("expected a name for the scalar"))
-	}
-	scalar.Name = litName
+	p.consumeNameLiteral("scalar")
+	scalar.Name = p.consumeName()
 	scalar.Directives = p.parseDirectives()
 
 	return
 }
 func (p *Parser) parseObjectTypeDefinition(desc *string) (obj ast.ObjectTypeDef) {
 	obj.Description = desc
-	p.sc.Scan()
-	_, nameTkn, name := p.sc.Scan()
-	if nameTkn != scanner.NAME {
-		p.errors = append(p.errors, errors.New("expected a name for object type"))
+	p.consumeNameLiteral("type")
+	obj.Name = p.consumeName()
+	if p.hasNextName("implements") {
+		obj.ImplementsInterface = p.parseImplements()
 	}
-	obj.Name = name
+	obj.Directives = p.parseDirectives()
 
-	args := p.parseArgumentsDefn()
+	if !p.hasNextTkn(scanner.LCURLY) {
+		return
+	}
+	obj.Fields = p.parseFieldDefs()
+
+	return
+}
+func (p *Parser) parseInterfaceTypeDef(desc *string) (intf ast.InterfaceDef) {
+	intf.Description = desc
+	p.consumeNameLiteral("interface")
+	intf.Name = p.consumeName()
+	intf.Directives = p.parseDirectives()
+
+	if !p.hasNextTkn(scanner.LCURLY) {
+		return
+	}
+	intf.Fields = p.parseFieldDefs()
+
+	return
+}
+func (p *Parser) parseFieldDefs() (fields []ast.FieldDef) {
+	p.consumeToken(scanner.LCURLY)
+	for {
+		if p.hasNextTkn(scanner.RCURLY) || p.hasNextTkn(scanner.EOF) {
+			break
+		}
+
+		fields = append(fields, p.parseFieldDef())
+	}
+	p.consumeToken(scanner.RCURLY)
+
+	return
+}
+func (p *Parser) parseFieldDef() (field ast.FieldDef) {
+	field.Description = p.parseDescription()
+	field.Name = p.consumeName()
+	field.Arguments = p.parseArgumentsDefn()
+	p.consumeToken(scanner.COLON)
+	field.Type = p.parseType()
+	field.Directives = p.parseDirectives()
+
+	return
+}
+func (p *Parser) parseType() (t ast.Type) {
+	if p.hasNextTkn(scanner.LSQUARE) {
+		p.consumeToken(scanner.LSQUARE)
+		in := p.parseType()
+		t.ListType = &in
+		p.consumeToken(scanner.RSQUARE)
+	} else if p.hasNextTkn(scanner.NAME) {
+		n := p.consumeName()
+		t.Name = &n
+	}
+
+	if p.hasNextTkn(scanner.BANG) {
+		var nullType ast.Type
+		nullType = t
+		t = ast.Type{NonNullType: &nullType}
+	}
+
+	return
+}
+func (p *Parser) parseImplements() (implements []string) {
+	p.consumeNameLiteral("implements")
+	if p.hasNextTkn(scanner.AMP) {
+		p.consumeToken(scanner.AMP)
+	}
+	for {
+		n := p.consumeName()
+		implements = append(implements, n)
+		if !p.hasNextTkn(scanner.AMP) {
+			break
+		}
+		p.consumeToken(scanner.AMP)
+	}
 	return
 }
 func (p *Parser) parseArgumentsDefn() (args []ast.ArgumentDef) {
-	_, tkn, _ := p.sc.Peek()
-	if tkn != scanner.LPAREN {
+	if !p.hasNextTkn(scanner.LPAREN) {
 		return
 	}
+	p.consumeToken(scanner.LPAREN)
 
 	for {
-		arg := ast.ArgumentDef{}
-		arg.Description = p.parseDescription()
-		if tkn == scanner.EOF {
-			p.errors = append(p.errors, errors.New("unexpected EOF"))
-			return
+		if p.hasNextTkn(scanner.RPAREN) || p.hasNextTkn(scanner.EOF) {
+			break
 		}
-
-		//_, tkn, lit := p.sc.Scan()
-
+		args = append(args, p.parseInputValueDefn())
 	}
+	p.consumeToken(scanner.RPAREN)
+
+	return
+}
+func (p *Parser) parseInputValueDefn() (arg ast.ArgumentDef) {
+	arg.Description = p.parseDescription()
+	arg.Name = p.consumeName()
+	p.consumeToken(scanner.COLON)
+	arg.Type = p.parseType()
+	if p.hasNextTkn(scanner.EQL) {
+		p.consumeToken(scanner.EQL)
+		arg.DefaultValue = p.parseValue()
+	}
+	arg.Directives = p.parseDirectives()
+
+	return
 }
 func (p *Parser) parseDescription() (description *string) {
-	_, tkn, _ := p.sc.Peek()
+	if p.hasNextTkn(scanner.STRING) || p.hasNextTkn(scanner.BLOCKSTRING) {
+		desc := p.consumeString()
+		return &desc
+	}
 
-	if tkn == scanner.STRING {
-		_, _, lit := p.sc.Scan()
-		val := lit[1 : len(lit)-1]
-		description = &val
-	}
-	if tkn == scanner.BLOCKSTRING {
-		_, _, lit := p.sc.Scan()
-		val := lit[3 : len(lit)-3]
-		description = &val
-	}
-	return
+	return nil
 }
 func (p *Parser) parseDirectives() (directives []ast.Directive) {
 	for {
-		_, tkn, _ := p.sc.Peek()
-		if tkn != scanner.AT {
-			return
+		if !p.hasNextTkn(scanner.AT) {
+			break
 		}
 
 		directives = append(directives, p.parseDirective())
 	}
+
+	return
 }
 func (p *Parser) parseDirective() (directive ast.Directive) {
-	p.sc.Scan()
-	_, nameToken, name := p.sc.Scan()
-	if nameToken != scanner.NAME {
-		p.errors = append(p.errors, errors.New("expected directive name"))
-	}
-	directive.Name = name
+	p.consumeToken(scanner.AT)
+	directive.Name = p.consumeName()
 
-	_, next, _ := p.sc.Peek()
-	if next == scanner.LPAREN {
+	if p.hasNextTkn(scanner.LPAREN) {
 		directive.Arguments = p.parseArguments()
 	}
 
@@ -196,47 +235,33 @@ func (p *Parser) parseDirective() (directive ast.Directive) {
 func (p *Parser) parseArguments() (arguments map[string]ast.Value) {
 	arguments = make(map[string]ast.Value)
 
-	_, tkn, _ := p.sc.Peek()
-	if tkn == scanner.LPAREN {
+	if !p.hasNextTkn(scanner.LPAREN) {
 		p.errors = append(p.errors, errors.New("expected left paren to start argument list"))
 		return
 	}
 	p.sc.Scan()
 
 	for {
-		_, tkn, _ := p.sc.Peek()
-		if tkn == scanner.RPAREN {
-			p.sc.Scan()
-			return
-		}
-		if tkn == scanner.EOF {
-			p.errors = append(p.errors, errors.New("unexpected EOF"))
+		if p.hasNextTkn(scanner.RPAREN) || p.hasNextTkn(scanner.EOF) {
+			break
 		}
 
 		name, value := p.parseArgument()
 		arguments[name] = value
 	}
+	p.consumeToken(scanner.RPAREN)
+	return
 }
 func (p *Parser) parseArgument() (name string, value ast.Value) {
-	_, tkn, name := p.sc.Scan()
-	if tkn != scanner.NAME {
-		p.errors = append(p.errors, errors.New("expected argument name"))
-	}
-	if _, tkn, _ := p.sc.Scan(); tkn != scanner.COLON {
-		p.errors = append(p.errors, errors.New("expected argument colon"))
-	}
+	name = p.consumeName()
+	p.consumeToken(scanner.COLON)
 	value = p.parseValue()
 
 	return
 }
 func (p *Parser) parseObjectField() (name string, value ast.Value) {
-	_, tkn, name := p.sc.Scan()
-	if tkn != scanner.NAME {
-		p.errors = append(p.errors, errors.New("expected object field name"))
-	}
-	if _, tkn, _ := p.sc.Scan(); tkn != scanner.COLON {
-		p.errors = append(p.errors, errors.New("expected object field colon"))
-	}
+	name = p.consumeName()
+	p.consumeToken(scanner.COLON)
 	value = p.parseValue()
 
 	return
@@ -246,12 +271,8 @@ func (p *Parser) parseValue() (value ast.Value) {
 	switch tkn {
 	case scanner.DOLLAR:
 		p.sc.Scan()
-		_, tkn, lit := p.sc.Scan()
-		if tkn != scanner.NAME {
-			p.errors = append(p.errors, errors.New("expected a name to follow $"))
-			break
-		}
-		value.Variable = &lit
+		name := p.consumeName()
+		value.Variable = &name
 	case scanner.INT:
 		_, _, lit := p.sc.Scan()
 		val, err := strconv.Atoi(lit)
@@ -267,13 +288,10 @@ func (p *Parser) parseValue() (value ast.Value) {
 		}
 		value.Float = &val
 	case scanner.STRING:
-		_, _, lit := p.sc.Scan()
-		val := lit[1 : len(lit)-1]
-		value.String = &val
+		fallthrough
 	case scanner.BLOCKSTRING:
-		_, _, lit := p.sc.Scan()
-		val := lit[3 : len(lit)-3]
-		value.String = &val
+		str := p.consumeString()
+		value.String = &str
 	case scanner.BOOL:
 		_, _, lit := p.sc.Scan()
 		b, _ := strconv.ParseBool(lit)
@@ -289,31 +307,25 @@ func (p *Parser) parseValue() (value ast.Value) {
 		p.sc.Scan()
 		value.List = make([]ast.Value, 0)
 		for {
-			_, tkn, _ := p.sc.Peek()
-			if tkn == scanner.RSQUARE {
+			if p.hasNextTkn(scanner.RSQUARE) || p.hasNextTkn(scanner.EOF) {
 				break
-			}
-			if tkn == scanner.EOF {
-				p.errors = append(p.errors, errors.New("unexpected EOF"))
 			}
 
 			value.List = append(value.List, p.parseValue())
 		}
+		p.consumeToken(scanner.RSQUARE)
 	case scanner.LCURLY:
 		p.sc.Scan()
 		value.Object = make(map[string]ast.Value)
 		for {
-			_, tkn, _ := p.sc.Peek()
-			if tkn == scanner.RCURLY {
+			if p.hasNextTkn(scanner.RCURLY) || p.hasNextTkn(scanner.EOF) {
 				break
-			}
-			if tkn == scanner.EOF {
-				p.errors = append(p.errors, errors.New("unexpected EOF"))
 			}
 
 			name, value := p.parseObjectField()
 			value.Object[name] = value
 		}
+		p.consumeToken(scanner.RCURLY)
 	default:
 		p.sc.Scan()
 		p.errors = append(p.errors, errors.New("unexpected token"))

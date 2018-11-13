@@ -36,6 +36,7 @@ const (
 	LCURLY
 	RCURLY
 	BAR
+	AMP
 )
 
 type Position struct {
@@ -57,12 +58,14 @@ type Scanner struct {
 }
 type scanFunc func(s *Scanner) (token Token, lit string)
 
-var scanFuncs = [...]scanFunc{
-	(*Scanner).scanEOF,
-	(*Scanner).scanComment,
+var skipFuncs = [...]scanFunc{
 	(*Scanner).scanWhitespace,
+	(*Scanner).scanComment,
 	(*Scanner).scanNewline,
 	(*Scanner).scanComma,
+}
+var scanFuncs = [...]scanFunc{
+	(*Scanner).scanEOF,
 	(*Scanner).scanPunctuator,
 	(*Scanner).scanFloat,
 	(*Scanner).scanInt,
@@ -78,10 +81,10 @@ func (s *Scanner) Init(src []byte) {
 }
 
 func (s *Scanner) Peek() (pos Position, token Token, lit string) {
+	s.skipWhitespace()
 	pos = Position{0, s.offset}
 	for _, f := range scanFuncs {
 		token, lit = f(s)
-
 		if token == ILLEGAL && len(lit) == 0 {
 			continue
 		}
@@ -94,6 +97,7 @@ func (s *Scanner) Peek() (pos Position, token Token, lit string) {
 }
 
 func (s *Scanner) Scan() (pos Position, token Token, lit string) {
+	s.skipWhitespace()
 	pos = Position{0, s.offset}
 	for _, f := range scanFuncs {
 		token, lit = f(s)
@@ -109,6 +113,22 @@ func (s *Scanner) Scan() (pos Position, token Token, lit string) {
 	lit = string(s.src[0])
 	s.consume(lit)
 	return
+}
+
+func (s *Scanner) skipWhitespace() {
+	done := false
+	for !done {
+		done = true
+		for _, f := range skipFuncs {
+			token, lit := f(s)
+			if token == ILLEGAL && len(lit) == 0 {
+				continue
+			}
+
+			s.consume(lit)
+			done = false
+		}
+	}
 }
 
 func (s *Scanner) consume(lit string) {
@@ -162,7 +182,7 @@ func (s *Scanner) scanComma() (token Token, lit string) {
 	return s.scanRegex(regexComma, COMMA)
 }
 
-var regexPunctuator = regexp.MustCompile(`^(\!|\$|\(|\)|\.\.\.|\:|\=|\@|\[|\]|\{|\||\})`)
+var regexPunctuator = regexp.MustCompile(`^(\!|\$|\(|\)|\.\.\.|\:|\=|\@|\[|\]|\{|\||\}|&)`)
 var punctuatorMap = map[string]Token{
 	"!":   BANG,
 	"$":   DOLLAR,
@@ -177,6 +197,7 @@ var punctuatorMap = map[string]Token{
 	"{":   LCURLY,
 	"|":   BAR,
 	"}":   RCURLY,
+	"&":   AMP,
 }
 
 func (s *Scanner) scanPunctuator() (token Token, lit string) {

@@ -17,50 +17,38 @@ func expectScanResult(t *testing.T, s *scanner.Scanner, token scanner.Token, lit
 }
 func TestScan(t *testing.T) {
 	src := `
-"something\""
-"""some
+		"something\""
+		"""some
 1234
 "bananas"
 thing"""
 """something\""""""
-12345
-0
--0
--1234
-1234.
--1234.
-1234e1
--1234e1
-!$()...:=@[]{|}
+		12345
+		0
+		-0
+		-1234
+		1234.
+		-1234.
+		1234e1
+		-1234e1
+		!$()...:=@[]{|}
 	`
 	s := &scanner.Scanner{}
 	s.Init([]byte(src))
-	expectScanResult(t, s, scanner.NEWLINE, "\n")
 	expectScanResult(t, s, scanner.STRING, `"something\""`)
-	expectScanResult(t, s, scanner.NEWLINE, "\n")
 	expectScanResult(t, s, scanner.BLOCKSTRING, `"""some
 1234
 "bananas"
 thing"""`)
-	expectScanResult(t, s, scanner.NEWLINE, "\n")
 	expectScanResult(t, s, scanner.BLOCKSTRING, `"""something\""""""`)
-	expectScanResult(t, s, scanner.NEWLINE, "\n")
 	expectScanResult(t, s, scanner.INT, `12345`)
-	expectScanResult(t, s, scanner.NEWLINE, "\n")
 	expectScanResult(t, s, scanner.INT, `0`)
-	expectScanResult(t, s, scanner.NEWLINE, "\n")
 	expectScanResult(t, s, scanner.INT, `-0`)
-	expectScanResult(t, s, scanner.NEWLINE, "\n")
 	expectScanResult(t, s, scanner.INT, `-1234`)
-	expectScanResult(t, s, scanner.NEWLINE, "\n")
 	expectScanResult(t, s, scanner.FLOAT, `1234.`)
-	expectScanResult(t, s, scanner.NEWLINE, "\n")
 	expectScanResult(t, s, scanner.FLOAT, `-1234.`)
-	expectScanResult(t, s, scanner.NEWLINE, "\n")
 	expectScanResult(t, s, scanner.FLOAT, `1234e1`)
-	expectScanResult(t, s, scanner.NEWLINE, "\n")
 	expectScanResult(t, s, scanner.FLOAT, `-1234e1`)
-	expectScanResult(t, s, scanner.NEWLINE, "\n")
 	expectScanResult(t, s, scanner.BANG, `!`)
 	expectScanResult(t, s, scanner.DOLLAR, `$`)
 	expectScanResult(t, s, scanner.LPAREN, `(`)
@@ -79,6 +67,5 @@ thing"""`)
 	s.Init([]byte(`
 "\"something
 `))
-	expectScanResult(t, s, scanner.NEWLINE, "\n")
 	expectScanResult(t, s, scanner.ILLEGAL, `"\"something`)
 }
