@@ -43,6 +43,15 @@ func TestSchemaParser(t *testing.T) {
 		Value
 		"value description" ValueWithDescription
 	}
+
+	input Input
+	"input description" input InputWithDescription
+	input InputWithValues {
+		x: Int
+		"description of input value"
+		y: String
+		z: int = 0
+	}
 	`
 	p := parser.Parser{}
 	p.Init([]byte(src))
@@ -81,6 +90,16 @@ func TestSchemaParser(t *testing.T) {
 			desc = "'" + *e.Description + "'"
 		}
 		t.Logf("Enum %v (description %v, directiveCount %v)", e.Name, desc, len(e.Directives))
+	}
+	for _, input := range doc.Inputs {
+		desc := "<nil>"
+		if input.Description != nil {
+			desc = "'" + *input.Description + "'"
+		}
+		t.Logf("Input %v (description %v, directiveCount %v)", input.Name, desc, len(input.Directives))
+	}
+	for _, err := range p.Errors() {
+		t.Error(err)
 	}
 
 }

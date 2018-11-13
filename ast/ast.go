@@ -9,6 +9,7 @@ type Document struct {
 	Interfaces  map[string]InterfaceDef
 	Unions      map[string]UnionDef
 	Enums       map[string]EnumDef
+	Inputs      map[string]InputDef
 }
 type Schema struct {
 	Node
@@ -63,19 +64,9 @@ type FieldDef struct {
 
 	Name        string
 	Description *string
-	Arguments   []ArgumentDef
+	Arguments   []InputValueDef
 	Type
 	Directives []Directive
-}
-type ArgumentDef struct {
-	Node
-
-	Name string
-	Type
-
-	Description  *string
-	DefaultValue Value
-	Directives   []Directive
 }
 
 type Type struct {
@@ -115,4 +106,21 @@ type EnumValueDef struct {
 	Description *string
 	Name        string
 	Directives  []Directive
+}
+type InputDef struct {
+	Node
+
+	Description *string
+	Name        string
+	Directives  []Directive
+	Fields      []InputValueDef
+}
+type InputValueDef struct {
+	Node
+
+	Description *string
+	Name        string
+	Type
+	DefaultValue *Value
+	Directives   []Directive
 }

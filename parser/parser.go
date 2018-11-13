@@ -28,6 +28,7 @@ func (p *Parser) Parse() (doc ast.Document) {
 	doc.Interfaces = make(map[string]ast.InterfaceDef)
 	doc.Unions = make(map[string]ast.UnionDef)
 	doc.Enums = make(map[string]ast.EnumDef)
+	doc.Inputs = make(map[string]ast.InputDef)
 
 	for {
 		var desc *string
@@ -57,6 +58,9 @@ func (p *Parser) Parse() (doc ast.Document) {
 		} else if p.hasNextName("enum") {
 			enum := p.parseEnumDef(desc)
 			doc.Enums[enum.Name] = enum
+		} else if p.hasNextName("input") {
+			input := p.parseInputDef(desc)
+			doc.Inputs[input.Name] = input
 		} else {
 			_, _, lit := p.sc.Scan()
 			p.errors = append(p.errors, errors.New("unknown: "+lit))
@@ -168,6 +172,40 @@ func (p *Parser) parseFieldDefs() (fields []ast.FieldDef) {
 
 	return
 }
+func (p *Parser) parseInputDef(desc *string) (input ast.InputDef) {
+	input.Description = desc
+	p.consumeNameLiteral("input")
+	input.Name = p.consumeName()
+	input.Directives = p.parseDirectives()
+	if !p.hasNextTkn(scanner.LCURLY) {
+		return
+	}
+	p.consumeToken(scanner.LCURLY)
+
+	for {
+		if p.hasNextTkn(scanner.RCURLY) || p.hasNextTkn(scanner.EOF) {
+			break
+		}
+		input.Fields = append(input.Fields, p.parseInputValueDef())
+	}
+	p.consumeToken(scanner.RCURLY)
+
+	return
+}
+func (p *Parser) parseInputValueDef() (val ast.InputValueDef) {
+	val.Description = p.parseDescription()
+	val.Name = p.consumeName()
+	p.consumeToken(scanner.COLON)
+	val.Type = p.parseType()
+	if p.hasNextTkn(scanner.EQL) {
+		p.consumeToken(scanner.EQL)
+		v := p.parseValue()
+		val.DefaultValue = &v
+	}
+	val.Directives = p.parseDirectives()
+
+	return
+}
 func (p *Parser) parseFieldDef() (field ast.FieldDef) {
 	field.Description = p.parseDescription()
 	field.Name = p.consumeName()
@@ -235,7 +273,7 @@ func (p *Parser) parseUnionDef(desc *string) (union ast.UnionDef) {
 
 	return
 }
-func (p *Parser) parseArgumentsDefn() (args []ast.ArgumentDef) {
+func (p *Parser) parseArgumentsDefn() (args []ast.InputValueDef) {
 	if !p.hasNextTkn(scanner.LPAREN) {
 		return
 	}
@@ -245,22 +283,9 @@ func (p *Parser) parseArgumentsDefn() (args []ast.ArgumentDef) {
 		if p.hasNextTkn(scanner.RPAREN) || p.hasNextTkn(scanner.EOF) {
 			break
 		}
-		args = append(args, p.parseInputValueDefn())
+		args = append(args, p.parseInputValueDef())
 	}
 	p.consumeToken(scanner.RPAREN)
-
-	return
-}
-func (p *Parser) parseInputValueDefn() (arg ast.ArgumentDef) {
-	arg.Description = p.parseDescription()
-	arg.Name = p.consumeName()
-	p.consumeToken(scanner.COLON)
-	arg.Type = p.parseType()
-	if p.hasNextTkn(scanner.EQL) {
-		p.consumeToken(scanner.EQL)
-		arg.DefaultValue = p.parseValue()
-	}
-	arg.Directives = p.parseDirectives()
 
 	return
 }
