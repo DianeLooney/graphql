@@ -27,6 +27,7 @@ func (p *Parser) Parse() (doc ast.Document) {
 	doc.ObjectTypes = make(map[string]ast.ObjectTypeDef)
 	doc.Interfaces = make(map[string]ast.InterfaceDef)
 	doc.Unions = make(map[string]ast.UnionDef)
+	doc.Enums = make(map[string]ast.EnumDef)
 
 	for {
 		var desc *string
@@ -53,6 +54,9 @@ func (p *Parser) Parse() (doc ast.Document) {
 		} else if p.hasNextName("union") {
 			union := p.parseUnionDef(desc)
 			doc.Unions[union.Name] = union
+		} else if p.hasNextName("enum") {
+			enum := p.parseEnumDef(desc)
+			doc.Enums[enum.Name] = enum
 		} else {
 			_, _, lit := p.sc.Scan()
 			p.errors = append(p.errors, errors.New("unknown: "+lit))
@@ -118,6 +122,36 @@ func (p *Parser) parseInterfaceTypeDef(desc *string) (intf ast.InterfaceDef) {
 		return
 	}
 	intf.Fields = p.parseFieldDefs()
+
+	return
+}
+func (p *Parser) parseEnumDef(desc *string) (enum ast.EnumDef) {
+	enum.Description = desc
+	p.consumeNameLiteral("enum")
+	enum.Name = p.consumeName()
+	enum.Directives = p.parseDirectives()
+	if !p.hasNextTkn(scanner.LCURLY) {
+		return
+	}
+	p.consumeToken(scanner.LCURLY)
+	for {
+		if p.hasNextTkn(scanner.RCURLY) || p.hasNextTkn(scanner.EOF) {
+			break
+		}
+		enum.Values = append(enum.Values, p.parseEnumValueDef())
+	}
+	p.consumeToken(scanner.RCURLY)
+
+	return
+}
+func (p *Parser) parseEnumValueDef() (val ast.EnumValueDef) {
+	val.Description = p.parseDescription()
+	val.Name = p.consumeName()
+	if val.Name == "true" || val.Name == "false" || val.Name == "" {
+		p.errors = append(p.errors, errors.New("invalid enum value"))
+		val.Name = ""
+	}
+	val.Directives = p.parseDirectives()
 
 	return
 }

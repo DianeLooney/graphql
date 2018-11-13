@@ -36,6 +36,13 @@ func TestSchemaParser(t *testing.T) {
 	union Union = | T1
 	"union description" union UnionWithDescription = T1
 	union Union2 = T1 | T2 | T3
+
+	enum Enum
+	"enum description" enum EnumWithDescription
+	enum EnumWithValues {
+		Value
+		"value description" ValueWithDescription
+	}
 	`
 	p := parser.Parser{}
 	p.Init([]byte(src))
@@ -67,6 +74,13 @@ func TestSchemaParser(t *testing.T) {
 			desc = "'" + *u.Description + "'"
 		}
 		t.Logf("Union %v (description %v, directiveCount %v, types %v)", u.Name, desc, len(u.Directives), strings.Join(u.Types, " | "))
+	}
+	for _, e := range doc.Enums {
+		desc := "<nil>"
+		if e.Description != nil {
+			desc = "'" + *e.Description + "'"
+		}
+		t.Logf("Enum %v (description %v, directiveCount %v)", e.Name, desc, len(e.Directives))
 	}
 
 }

@@ -8,6 +8,7 @@ type Document struct {
 	ObjectTypes map[string]ObjectTypeDef
 	Interfaces  map[string]InterfaceDef
 	Unions      map[string]UnionDef
+	Enums       map[string]EnumDef
 }
 type Schema struct {
 	Node
@@ -99,4 +100,19 @@ type UnionDef struct {
 	Name        string
 	Directives  []Directive
 	Types       []string
+}
+type EnumDef struct {
+	Node
+
+	Description *string
+	Name        string
+	Directives  []Directive
+	Values      []EnumValueDef
+}
+type EnumValueDef struct {
+	Node
+
+	Description *string
+	Name        string
+	Directives  []Directive
 }
