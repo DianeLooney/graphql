@@ -29,6 +29,7 @@ func (p *Parser) Parse() (doc ast.Document) {
 	doc.Unions = make(map[string]ast.UnionDef)
 	doc.Enums = make(map[string]ast.EnumDef)
 	doc.Inputs = make(map[string]ast.InputDef)
+	doc.Directives = make(map[string]ast.DirectiveDef)
 
 	for {
 		var desc *string
@@ -61,6 +62,9 @@ func (p *Parser) Parse() (doc ast.Document) {
 		} else if p.hasNextName("input") {
 			input := p.parseInputDef(desc)
 			doc.Inputs[input.Name] = input
+		} else if p.hasNextName("directive") {
+			dir := p.parseDirectiveDef(desc)
+			doc.Directives[dir.Name] = dir
 		} else {
 			_, _, lit := p.sc.Scan()
 			p.errors = append(p.errors, errors.New("unknown: "+lit))
@@ -213,6 +217,33 @@ func (p *Parser) parseFieldDef() (field ast.FieldDef) {
 	p.consumeToken(scanner.COLON)
 	field.Type = p.parseType()
 	field.Directives = p.parseDirectives()
+
+	return
+}
+func (p *Parser) parseDirectiveDef(desc *string) (dir ast.DirectiveDef) {
+	dir.Description = desc
+	p.consumeNameLiteral("directive")
+	p.consumeToken(scanner.AT)
+	dir.Name = p.consumeName()
+	dir.Arguments = p.parseArgumentsDefn()
+	p.consumeNameLiteral("on")
+	if p.hasNextTkn(scanner.BAR) {
+		p.consumeToken(scanner.BAR)
+	}
+	for {
+		location := p.consumeName()
+		_, isExec := ast.ExecutableDirectiveLocations[location]
+		_, isType := ast.TypeSystemDirectiveLocations[location]
+		if !isExec && !isType {
+			p.errors = append(p.errors, errors.New("unepected directive location"))
+		} else {
+			dir.Locations = append(dir.Locations, location)
+		}
+		if !p.hasNextTkn(scanner.BAR) {
+			break
+		}
+		p.consumeToken(scanner.BAR)
+	}
 
 	return
 }

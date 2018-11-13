@@ -3,13 +3,14 @@ package ast
 type Node struct {
 }
 type Document struct {
-	*Schema
+	Schema      *Schema
 	Scalars     map[string]ScalarDef
 	ObjectTypes map[string]ObjectTypeDef
 	Interfaces  map[string]InterfaceDef
 	Unions      map[string]UnionDef
 	Enums       map[string]EnumDef
 	Inputs      map[string]InputDef
+	Directives  map[string]DirectiveDef
 }
 type Schema struct {
 	Node
@@ -123,4 +124,37 @@ type InputValueDef struct {
 	Type
 	DefaultValue *Value
 	Directives   []Directive
+}
+
+var ExecutableDirectiveLocations = map[string]bool{
+	"QUERY":               true,
+	"MUTATION":            true,
+	"SUBSCRIPTION":        true,
+	"FIELD":               true,
+	"FRAGMENT_DEFINITION": true,
+	"FRAGMENT_SPREAD":     true,
+	"INLINE_FRAGMENT":     true,
+	"VARIABLE_DEFINITION": true,
+}
+var TypeSystemDirectiveLocations = map[string]bool{
+	"SCHEMA":                 true,
+	"SCALAR":                 true,
+	"OBJECT":                 true,
+	"FIELD_DEFINITION":       true,
+	"ARGUMENT_DEFINITION":    true,
+	"INTERFACE":              true,
+	"UNION":                  true,
+	"ENUM":                   true,
+	"ENUM_VALUE":             true,
+	"INPUT_OBJECT":           true,
+	"INPUT_FIELD_DEFINITION": true,
+}
+
+type DirectiveDef struct {
+	Node
+
+	Description *string
+	Name        string
+	Arguments   []InputValueDef
+	Locations   []string
 }

@@ -52,6 +52,11 @@ func TestSchemaParser(t *testing.T) {
 		y: String
 		z: int = 0
 	}
+
+	directive @Directive on SCALAR
+	"directive description" directive @DirectiveWithDescription on ENUM
+	directive @DirectiveOnMulti on UNION | INPUT_OBJECT | FIELD
+
 	`
 	p := parser.Parser{}
 	p.Init([]byte(src))
@@ -97,6 +102,13 @@ func TestSchemaParser(t *testing.T) {
 			desc = "'" + *input.Description + "'"
 		}
 		t.Logf("Input %v (description %v, directiveCount %v)", input.Name, desc, len(input.Directives))
+	}
+	for _, dir := range doc.Directives {
+		desc := "<nil>"
+		if dir.Description != nil {
+			desc = "'" + *dir.Description + "'"
+		}
+		t.Logf("Directive %v (description %v, onCount %v)", dir.Name, desc, dir.Locations)
 	}
 	for _, err := range p.Errors() {
 		t.Error(err)
