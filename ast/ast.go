@@ -7,6 +7,7 @@ type Document struct {
 	Scalars     map[string]ScalarDef
 	ObjectTypes map[string]ObjectTypeDef
 	Interfaces  map[string]InterfaceDef
+	Unions      map[string]UnionDef
 }
 type Schema struct {
 	Node
@@ -82,8 +83,6 @@ type Type struct {
 	NonNullType *Type
 }
 
-//DescriptionoptinterfaceNameDirectivesConstoptFieldsDefinitionopt
-
 type InterfaceDef struct {
 	Node
 
@@ -91,4 +90,13 @@ type InterfaceDef struct {
 	Name        string
 	Directives  []Directive
 	Fields      []FieldDef
+}
+
+type UnionDef struct {
+	Node
+
+	Description *string
+	Name        string
+	Directives  []Directive
+	Types       []string
 }

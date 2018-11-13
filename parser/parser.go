@@ -26,6 +26,7 @@ func (p *Parser) Parse() (doc ast.Document) {
 	doc.Scalars = make(map[string]ast.ScalarDef)
 	doc.ObjectTypes = make(map[string]ast.ObjectTypeDef)
 	doc.Interfaces = make(map[string]ast.InterfaceDef)
+	doc.Unions = make(map[string]ast.UnionDef)
 
 	for {
 		var desc *string
@@ -49,6 +50,9 @@ func (p *Parser) Parse() (doc ast.Document) {
 		} else if p.hasNextName("interface") {
 			intf := p.parseInterfaceTypeDef(desc)
 			doc.Interfaces[intf.Name] = intf
+		} else if p.hasNextName("union") {
+			union := p.parseUnionDef(desc)
+			doc.Unions[union.Name] = union
 		} else {
 			_, _, lit := p.sc.Scan()
 			p.errors = append(p.errors, errors.New("unknown: "+lit))
@@ -172,6 +176,29 @@ func (p *Parser) parseImplements() (implements []string) {
 		}
 		p.consumeToken(scanner.AMP)
 	}
+	return
+}
+func (p *Parser) parseUnionDef(desc *string) (union ast.UnionDef) {
+	union.Description = desc
+	p.consumeNameLiteral("union")
+	union.Name = p.consumeName()
+	union.Directives = p.parseDirectives()
+	if !p.hasNextTkn(scanner.EQL) {
+		return
+	}
+	p.consumeToken(scanner.EQL)
+	if p.hasNextTkn(scanner.BAR) {
+		p.consumeToken(scanner.BAR)
+	}
+	for {
+		n := p.consumeName()
+		union.Types = append(union.Types, n)
+		if !p.hasNextTkn(scanner.BAR) {
+			break
+		}
+		p.consumeToken(scanner.BAR)
+	}
+
 	return
 }
 func (p *Parser) parseArgumentsDefn() (args []ast.ArgumentDef) {

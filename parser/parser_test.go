@@ -1,6 +1,7 @@
 package parser_test
 
 import (
+	"strings"
 	"testing"
 
 	parser "github.com/dianelooney/graphql/parser"
@@ -32,6 +33,9 @@ func TestSchemaParser(t *testing.T) {
 
 	interface Interface {}
 	"interface description" interface InterfaceWithDescription {}
+	union Union = | T1
+	"union description" union UnionWithDescription = T1
+	union Union2 = T1 | T2 | T3
 	`
 	p := parser.Parser{}
 	p.Init([]byte(src))
@@ -56,6 +60,13 @@ func TestSchemaParser(t *testing.T) {
 			desc = "'" + *intf.Description + "'"
 		}
 		t.Logf("Interface %v (description %v, directiveCount %v)", intf.Name, desc, len(intf.Directives))
+	}
+	for _, u := range doc.Unions {
+		desc := "<nil>"
+		if u.Description != nil {
+			desc = "'" + *u.Description + "'"
+		}
+		t.Logf("Union %v (description %v, directiveCount %v, types %v)", u.Name, desc, len(u.Directives), strings.Join(u.Types, " | "))
 	}
 
 }
