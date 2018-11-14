@@ -30,6 +30,7 @@ func (p *Parser) Parse() (doc ast.Document) {
 	doc.Enums = make(map[string]ast.EnumDef)
 	doc.Inputs = make(map[string]ast.InputDef)
 	doc.Directives = make(map[string]ast.DirectiveDef)
+	doc.Fragments = make(map[string]ast.FragmentDef)
 
 	for {
 		var desc *string
@@ -37,14 +38,28 @@ func (p *Parser) Parse() (doc ast.Document) {
 			break
 		}
 
-		desc = p.parseDescription()
 		if p.hasNextName("schema") {
-			if desc != nil {
-				p.errors = append(p.errors, errors.New("unexpected description string given on schema"))
-			}
 			schema := p.parseSchema()
 			doc.Schema = &schema
-		} else if p.hasNextName("scalar") {
+			continue
+		} else if p.hasNextName("query") ||
+			p.hasNextName("mutation") ||
+			p.hasNextName("subscription") {
+			op := p.parseOperationDef()
+			doc.Operations[*op.Name] = op
+			continue
+		} else if p.hasNextTkn(scanner.LCURLY) {
+			op := p.parseOperationDef()
+			doc.Operations[*op.Name] = op
+			continue
+		} else if p.hasNextName("fragment") {
+			frag := p.parseFragmentDef()
+			doc.Fragments[frag.Name] = frag
+			continue
+		}
+
+		desc = p.parseDescription()
+		if p.hasNextName("scalar") {
 			scalar := p.parseScalarTypeDefinition(desc)
 			doc.Scalars[scalar.Name] = scalar
 		} else if p.hasNextName("type") {
@@ -70,6 +85,129 @@ func (p *Parser) Parse() (doc ast.Document) {
 			p.errors = append(p.errors, errors.New("unknown: "+lit))
 		}
 	}
+
+	return
+}
+
+func (p *Parser) parseOperationDef() (op ast.Operation) {
+	if p.hasNextName("query") ||
+		p.hasNextName("mutation") ||
+		p.hasNextName("subscription") {
+		op.OpType = p.consumeName()
+		if p.hasNextTkn(scanner.NAME) {
+			name := p.consumeName()
+			op.Name = &name
+		}
+		if p.hasNextTkn(scanner.LPAREN) {
+			p.consumeToken(scanner.LPAREN)
+			for {
+				if p.hasNextTkn(scanner.RPAREN) || p.hasNextTkn(scanner.EOF) {
+					break
+				}
+				op.Variables = append(op.Variables, p.parseVariableDef())
+			}
+			p.consumeToken(scanner.RPAREN)
+		}
+		op.Directives = p.parseDirectives()
+	} else {
+		op.OpType = "query"
+	}
+	op.SelectionSet = p.parseSelectionSet()
+
+	return
+}
+
+func (p *Parser) parseSelection() (sel ast.Selection) {
+	if !p.hasNextTkn(scanner.ELLIPSIS) {
+		field := p.parseField()
+		sel.Field = &field
+	} else {
+		p.consumeToken(scanner.ELLIPSIS)
+		if p.hasNextName("on") {
+			frag := p.parseInlineFragment()
+			sel.InlineFragment = &frag
+		} else {
+			frag := p.parseFragmentSpread()
+			sel.FragmentSpread = &frag
+		}
+	}
+
+	return
+}
+func (p *Parser) parseFragmentDef() (frag ast.FragmentDef) {
+	p.consumeNameLiteral("fragment")
+	frag.Name = p.consumeName()
+	p.consumeNameLiteral("on")
+	frag.Type = p.consumeName()
+	frag.Directives = p.parseDirectives()
+	frag.SelectionSet = p.parseSelectionSet()
+
+	return
+}
+func (p *Parser) parseField() (field ast.Field) {
+	n1 := p.consumeName()
+	if p.hasNextTkn(scanner.COLON) {
+		p.consumeToken(scanner.COLON)
+		field.Alias = &n1
+		field.Name = p.consumeName()
+	} else {
+		field.Name = n1
+	}
+	if p.hasNextTkn(scanner.LPAREN) {
+		field.Arguments = p.parseArguments()
+	}
+
+	field.Directives = p.parseDirectives()
+	if p.hasNextTkn(scanner.LCURLY) {
+		field.SelectionSet = p.parseSelectionSet()
+	}
+
+	return
+}
+func (p *Parser) parseInlineFragment() (frag ast.InlineFragment) {
+	// ... is already consumed, as we have to distinguish
+	// between InlineFragment and FragmentSpread
+	p.consumeNameLiteral("on")
+	inline := ast.InlineFragment{}
+	if p.hasNextTkn(scanner.NAME) {
+		n := p.consumeName()
+		inline.Type = &n
+	}
+	inline.Directives = p.parseDirectives()
+	inline.SelectionSet = p.parseSelectionSet()
+
+	return
+}
+func (p *Parser) parseFragmentSpread() (frag ast.FragmentSpread) {
+	frag.Name = p.consumeName()
+	frag.Directives = p.parseDirectives()
+
+	return
+}
+func (p *Parser) parseSelectionSet() (selections []ast.Selection) {
+	p.consumeToken(scanner.LCURLY)
+	for {
+		if p.hasNextTkn(scanner.RCURLY) || p.hasNextTkn(scanner.EOF) {
+			break
+		}
+
+		selections = append(selections, p.parseSelection())
+	}
+	p.consumeToken(scanner.RCURLY)
+
+	return
+}
+
+func (p *Parser) parseVariableDef() (vari ast.VariableDef) {
+	p.consumeToken(scanner.DOLLAR)
+	vari.Name = p.consumeName()
+	p.consumeToken(scanner.COLON)
+	if p.hasNextTkn(scanner.EQL) {
+		p.consumeToken(scanner.EQL)
+		v := p.parseValue()
+		vari.DefaultValue = &v
+	}
+	vari.Directives = p.parseDirectives()
 
 	return
 }

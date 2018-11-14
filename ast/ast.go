@@ -3,6 +3,10 @@ package ast
 type Node struct {
 }
 type Document struct {
+	Operation  *Operation
+	Operations map[string]Operation
+	Fragments  map[string]FragmentDef
+
 	Schema      *Schema
 	Scalars     map[string]ScalarDef
 	ObjectTypes map[string]ObjectTypeDef
@@ -11,6 +15,46 @@ type Document struct {
 	Enums       map[string]EnumDef
 	Inputs      map[string]InputDef
 	Directives  map[string]DirectiveDef
+}
+type Operation struct {
+	OpType       string
+	Name         *string
+	Variables    []VariableDef
+	Directives   []Directive
+	SelectionSet []Selection
+}
+type VariableDef struct {
+	Name string
+	Type
+	DefaultValue *Value
+	Directives   []Directive
+}
+type Selection struct {
+	*Field
+	*FragmentSpread
+	*InlineFragment
+}
+type Field struct {
+	Alias        *string
+	Name         string
+	Arguments    map[string]Value
+	Directives   []Directive
+	SelectionSet []Selection
+}
+type FragmentSpread struct {
+	Name       string
+	Directives []Directive
+}
+type InlineFragment struct {
+	Type         *string
+	Directives   []Directive
+	SelectionSet []Selection
+}
+type FragmentDef struct {
+	Name         string
+	Type         string
+	Directives   []Directive
+	SelectionSet []Selection
 }
 type Schema struct {
 	Node

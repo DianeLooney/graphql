@@ -57,6 +57,16 @@ func TestSchemaParser(t *testing.T) {
 	"directive description" directive @DirectiveWithDescription on ENUM
 	directive @DirectiveOnMulti on UNION | INPUT_OBJECT | FIELD
 
+	fragment Frag1 on Obj {
+		x
+	}
+	fragment Frag2 on Obj {
+		y(r: "s") {
+			t
+			l: n
+			e
+		}
+	}
 	`
 	p := parser.Parser{}
 	p.Init([]byte(src))
@@ -110,8 +120,10 @@ func TestSchemaParser(t *testing.T) {
 		}
 		t.Logf("Directive %v (description %v, onCount %v)", dir.Name, desc, dir.Locations)
 	}
+	for _, frag := range doc.Fragments {
+		t.Logf("Fragment %v", frag.Name)
+	}
 	for _, err := range p.Errors() {
 		t.Error(err)
 	}
-
 }
