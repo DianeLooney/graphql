@@ -7,14 +7,17 @@ type Document struct {
 	Operations map[string]Operation
 	Fragments  map[string]FragmentDef
 
-	Schema      *Schema
-	Scalars     map[string]ScalarDef
-	ObjectTypes map[string]ObjectTypeDef
-	Interfaces  map[string]InterfaceDef
-	Unions      map[string]UnionDef
-	Enums       map[string]EnumDef
-	Inputs      map[string]InputDef
-	Directives  map[string]DirectiveDef
+	Schema     *Schema
+	Types      map[string]TypeDef
+	Directives map[string]DirectiveDef
+}
+type TypeDef struct {
+	*ScalarDef
+	*ObjectTypeDef
+	*InterfaceDef
+	*UnionDef
+	*EnumDef
+	*InputDef
 }
 type Operation struct {
 	OpType       string

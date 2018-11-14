@@ -23,12 +23,7 @@ func (p *Parser) Init(src []byte) {
 }
 
 func (p *Parser) Parse() (doc ast.Document) {
-	doc.Scalars = make(map[string]ast.ScalarDef)
-	doc.ObjectTypes = make(map[string]ast.ObjectTypeDef)
-	doc.Interfaces = make(map[string]ast.InterfaceDef)
-	doc.Unions = make(map[string]ast.UnionDef)
-	doc.Enums = make(map[string]ast.EnumDef)
-	doc.Inputs = make(map[string]ast.InputDef)
+	doc.Types = make(map[string]ast.TypeDef)
 	doc.Directives = make(map[string]ast.DirectiveDef)
 	doc.Fragments = make(map[string]ast.FragmentDef)
 
@@ -61,22 +56,22 @@ func (p *Parser) Parse() (doc ast.Document) {
 		desc = p.parseDescription()
 		if p.hasNextName("scalar") {
 			scalar := p.parseScalarTypeDefinition(desc)
-			doc.Scalars[scalar.Name] = scalar
+			doc.Types[scalar.Name] = ast.TypeDef{ScalarDef: &scalar}
 		} else if p.hasNextName("type") {
 			obj := p.parseObjectTypeDefinition(desc)
-			doc.ObjectTypes[obj.Name] = obj
+			doc.Types[obj.Name] = ast.TypeDef{ObjectTypeDef: &obj}
 		} else if p.hasNextName("interface") {
 			intf := p.parseInterfaceTypeDef(desc)
-			doc.Interfaces[intf.Name] = intf
+			doc.Types[intf.Name] = ast.TypeDef{InterfaceDef: &intf}
 		} else if p.hasNextName("union") {
 			union := p.parseUnionDef(desc)
-			doc.Unions[union.Name] = union
+			doc.Types[union.Name] = ast.TypeDef{UnionDef: &union}
 		} else if p.hasNextName("enum") {
 			enum := p.parseEnumDef(desc)
-			doc.Enums[enum.Name] = enum
+			doc.Types[enum.Name] = ast.TypeDef{EnumDef: &enum}
 		} else if p.hasNextName("input") {
 			input := p.parseInputDef(desc)
-			doc.Inputs[input.Name] = input
+			doc.Types[input.Name] = ast.TypeDef{InputDef: &input}
 		} else if p.hasNextName("directive") {
 			dir := p.parseDirectiveDef(desc)
 			doc.Directives[dir.Name] = dir
