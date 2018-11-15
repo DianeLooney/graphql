@@ -44,17 +44,11 @@ type Position struct {
 	Offset int
 }
 
-type historyEntry struct {
-	pos   Position
-	token Token
-	lit   string
-}
 type Scanner struct {
-	src          []byte
-	offset       int
-	history      []historyEntry
-	historyIndex int
-	undoCount    []int
+	src    []byte
+	offset int
+	data   []result
+	idx    int
 }
 type scanFunc func(s *Scanner) (token Token, lit string)
 
@@ -75,28 +69,46 @@ var scanFuncs = [...]scanFunc{
 	(*Scanner).scanName,
 }
 
+type result struct {
+	pos Position
+	tkn Token
+	lit string
+}
+
 func (s *Scanner) Init(src []byte) {
 	s.src = src
 	s.offset = 0
-}
-
-func (s *Scanner) Peek() (pos Position, token Token, lit string) {
-	s.skipWhitespace()
-	pos = Position{0, s.offset}
-	for _, f := range scanFuncs {
-		token, lit = f(s)
-		if token == ILLEGAL && len(lit) == 0 {
-			continue
+	s.idx = 0
+	s.data = make([]result, 0)
+	for {
+		pos, tkn, lit := s.scan()
+		if tkn == EOF {
+			break
 		}
 
-		return
+		s.data = append(s.data, result{pos, tkn, lit})
+	}
+}
+
+func (s *Scanner) get(i int) (pos Position, token Token, lit string) {
+	if i >= len(s.data) {
+		token = EOF
+	} else {
+		res := s.data[i]
+		pos, token, lit = res.pos, res.tkn, res.lit
 	}
 
-	lit = string(s.src[0])
 	return
 }
 
-func (s *Scanner) Scan() (pos Position, token Token, lit string) {
+func (s *Scanner) Peek() (pos Position, token Token, lit string) {
+	return s.PeekN(0)
+}
+func (s *Scanner) PeekN(n int) (pos Position, token Token, lit string) {
+	return s.get(s.idx + n)
+}
+
+func (s *Scanner) scan() (pos Position, token Token, lit string) {
 	s.skipWhitespace()
 	pos = Position{0, s.offset}
 	for _, f := range scanFuncs {
@@ -112,6 +124,13 @@ func (s *Scanner) Scan() (pos Position, token Token, lit string) {
 
 	lit = string(s.src[0])
 	s.consume(lit)
+	return
+}
+
+func (s *Scanner) Scan() (pos Position, token Token, lit string) {
+	pos, token, lit = s.Peek()
+	s.idx++
+
 	return
 }
 
