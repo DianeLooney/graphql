@@ -38,22 +38,16 @@ func (p *Parser) consumeToken(tkn scanner.Token) string {
 	return lit
 }
 func (p *Parser) consumeString() string {
-	if !p.hasNextTkn(scanner.STRING) &&
-		!p.hasNextTkn(scanner.BLOCKSTRING) {
+	_, tkn, lit := p.sc.Peek()
+	switch tkn {
+	case scanner.STRING:
+		p.sc.Scan()
+		return lit[1 : len(lit)-1]
+	case scanner.BLOCKSTRING:
+		p.sc.Scan()
+		return lit[3 : len(lit)-3]
+	default:
 		p.errors = append(p.errors, errors.New("expected to find a string"))
 		return ""
 	}
-
-	if p.hasNextTkn(scanner.STRING) {
-		_, _, lit := p.sc.Scan()
-		val := lit[1 : len(lit)-1]
-		return val
-	}
-	if p.hasNextTkn(scanner.BLOCKSTRING) {
-		_, _, lit := p.sc.Scan()
-		val := lit[3 : len(lit)-3]
-		return val
-	}
-
-	panic("parser bug")
 }
